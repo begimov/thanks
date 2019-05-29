@@ -107,42 +107,10 @@ class GitHubClient
     {
         $repo = $this->composer->getRepositoryManager()->getLocalRepository();
 
-        $urls = [
-            'composer/composer' => 'https://github.com/composer/composer',
-            'php/php-src' => 'https://github.com/php/php-src',
-            'symfony/thanks' => 'https://github.com/symfony/thanks',
-        ];
-
-        $directPackages = $this->getDirectlyRequiredPackageNames();
-        // symfony/thanks shouldn't trigger thanking symfony/symfony
-        unset($directPackages['symfony/thanks']);
-        foreach ($repo->getPackages() as $package) {
-            $extra = $package->getExtra();
-
-            if (isset($extra['thanks']['name'], $extra['thanks']['url'])) {
-                $urls += [$extra['thanks']['name'] => $extra['thanks']['url']];
-            }
-
-            if (!$url = $package->getSourceUrl()) {
-                continue;
-            }
-
-            $urls[$package->getName()] = $url;
-
-            if (!preg_match('#^https://github.com/([^/]++)#', $url, $url)) {
-                continue;
-            }
-            $owner = $url[1];
-
-            // star the main repository, but only if this package is directly
-            // being required by the user's composer.json
-            if (isset(self::$mainRepositories[$owner], $directPackages[$package->getName()])) {
-                $urls[self::$mainRepositories[$owner]['name']] = self::$mainRepositories[$owner]['url'];
-            }
-        }
+        $urls = $this->getAwesioPackages();
 
         ksort($urls);
-
+        
         $i = 0;
         $template = '_%d: repository(owner:"%s",name:"%s"){id,viewerHasStarred}'."\n";
         $graphql = '';
@@ -223,5 +191,18 @@ class GitHubClient
         $data = array_keys($data['require'] + $data['require-dev']);
 
         return array_combine($data, $data);
+    }
+
+    private function getAwesioPackages()
+    {
+        $file = new JsonFile(Factory::getComposerFile(), null, $this->io);
+
+        if (!$file->exists()) {
+            throw new \Exception('Could not find your composer.json file!');
+        }
+
+        $data = $file->read();
+        
+        return $data['extra']['awes-io-thanks'];
     }
 }
